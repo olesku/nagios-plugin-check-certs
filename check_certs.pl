@@ -8,7 +8,7 @@ use strict;
 use Getopt::Std;
 
 my %config = (
-  'warnDays'        => 5,
+  'warnDays'        => 30,
   'criticalDays'    => 10,
   'fileExtensions'  => 'cer,crt'
 );
