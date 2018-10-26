@@ -1,9 +1,7 @@
 # nagios-plugin-check-certs ###
 
-This Nagios plugin monitors expiration dates of certificates.
-It suppors both recursing paths with certificates or single certificates.
-
-It requires the ```openssl``` and ```date``` command to be installed.
+This Nagios plugin monitors expiration dates of x509 certificate files.
+It suppors both recursing paths with certificates or single files.
 
 #### Usage: #####
 ```
