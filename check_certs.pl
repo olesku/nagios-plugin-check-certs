@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# Nagios plugin that monitors expiration dates of SSL certificates.
+# Nagios plugin that monitors expiration dates of certificates.
 # Author: Ole Fredrik Skudsvik <ole.skudsvik@gmail.com>
 
 # nagios: -epn
