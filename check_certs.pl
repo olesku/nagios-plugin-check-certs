@@ -88,7 +88,7 @@ sub outputSummaryNagios {
       if ($failedCertificates->{$_}{'daysLeft'} <= $config{'warnDays'} && 
           $failedCertificates->{$_}{'daysLeft'} > $config{'criticalDays'}) {
         printf("WARNING: %s expires in %d days on %s\n", $_, $failedCertificates->{$_}{'daysLeft'}, $failedCertificates->{$_}{'endDate'});
-        $exitCode = 1;
+        $exitCode = 1 if ($exitCode < 1);
       } elsif ($failedCertificates->{$_}{'daysLeft'} <= $config{'criticalDays'}) {
         printf("CRITICAL: %s expires in %d days on %s\n", $_, $failedCertificates->{$_}{'daysLeft'}, $failedCertificates->{$_}{'endDate'});
         $exitCode = 2;
