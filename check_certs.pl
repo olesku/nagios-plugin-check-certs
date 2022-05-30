@@ -16,16 +16,70 @@ my %config = (
 my $openssl_bin     = `which openssl`;
 my $date_bin        = `which date`;
 
+# The shell "Interanl Field Separator" - most commonly
+# <space><tab><new‐line> but has interesting uses in security
+# contexts.  If it has not been exported by the shell just match
+# whitespace.
+my $IFS             = $ENV{'IFS'} || '\s';
+
+# test => wanted result.  Take care about the quoting.... ;-) Even
+# single quoted strings in perl have some escapes needed for some
+# characters.
+my %tests = ("foo/bar"  => 'foo/bar',
+	     "foo'bar"  => 'foo\\\'bar',
+	     'foo"bar'  => 'foo\"bar',
+	     "foo bar"  => 'foo\ bar',
+	     'foo\bar'  => 'foo\\\bar',
+	     "foo\tbar" => "foo\\\tbar",
+	     "foo(bar)" => 'foo\(bar\)',
+	     "foo[bar]" => 'foo\[bar\]',
+	     "foo{bar}" => 'foo\{bar\}',
+	     "foo\nbar" => "foo\\\nbar",
+	     'foo$bar'  => 'foo\$bar' );
+
+sub runTests {
+    my $tests = 0;
+    my $fail = 0;
+    for my $t (keys %tests) {
+	$tests++;
+	my $w = $tests{$t};
+	my $r = quoteFileName($t);
+	if ($r eq $w) {
+	    print "Unquoted: /$t/, quoted: /$r/ == /$w/: OK\n";
+	} else {
+	    print "Unquoted: /$t/, quoted: /$r/ != /$w/: FAIL\n";
+	    $fail++;
+	}
+    }
+    print "\n";
+    print "Tests run: $tests.  Tests failed: $fail\n";
+}
+
+
+sub quoteFileName {
+    my ($string) = @_;
+
+    # Quote some shell meta characters.
+    $string =~ s/([\[\]\{\}\\()"'\$${IFS}])/\\$1/ogm;
+
+    return $string;
+}
+
+
 sub checkCertificates {
   my (@cerificateFiles) = @_;
   my %failedCertificates;
 
   foreach my $certFile (@cerificateFiles) {
-    my $openssl_cmd = sprintf("%s x509 -in '%s' -noout -enddate 2>&1", $openssl_bin, $certFile);
+    my $shellName = quoteFileName($certFile);
+    my $openssl_cmd = sprintf("%s x509 -in %s -noout -enddate 2>&1", $openssl_bin, $shellName);
     my $openssl_enddate = `$openssl_cmd`;
-
+    if ($?) {
+	printf("CRITICAL: openssl fails on check of %s\n", $certFile);
+	exit 2;
+    }
     next if (!($openssl_enddate =~ m/^notAfter/));
-    
+
     $openssl_enddate =~ s/notAfter\=//;
     chomp($openssl_enddate);
 
@@ -50,6 +104,7 @@ sub checkCertificates {
 sub parseDir {
   my ($arrayRef, $dir, $ext) = (@_);
   return if (! -d $dir);
+
 
   opendir(my $dh, $dir) or return;
     while(my $file = readdir($dh)) {
@@ -104,7 +159,8 @@ sub outputSummaryNagios {
 }
 
 my %opts;
-getopts('w:c:e:h', \%opts);
+getopts('w:c:e:h:t', \%opts);
+runTests,exit(0)			  if (defined($opts{'t'}));
 printUsage()                              if (defined($opts{'h'}));
 $config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
 $config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
