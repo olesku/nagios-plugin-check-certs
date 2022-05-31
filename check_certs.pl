@@ -22,40 +22,6 @@ my $date_bin        = `which date`;
 # whitespace.
 my $IFS             = $ENV{'IFS'} || '\s';
 
-# test => wanted result.  Take care about the quoting.... ;-) Even
-# single quoted strings in perl have some escapes needed for some
-# characters.
-my %tests = ("foo/bar"  => 'foo/bar',
-	     "foo'bar"  => 'foo\\\'bar',
-	     'foo"bar'  => 'foo\"bar',
-	     "foo bar"  => 'foo\ bar',
-	     'foo\bar'  => 'foo\\\bar',
-	     "foo\tbar" => "foo\\\tbar",
-	     "foo(bar)" => 'foo\(bar\)',
-	     "foo[bar]" => 'foo\[bar\]',
-	     "foo{bar}" => 'foo\{bar\}',
-	     "foo\nbar" => "foo\\\nbar",
-	     'foo$bar'  => 'foo\$bar' );
-
-sub runTests {
-    my $tests = 0;
-    my $fail = 0;
-    for my $t (keys %tests) {
-	$tests++;
-	my $w = $tests{$t};
-	my $r = quoteFileName($t);
-	if ($r eq $w) {
-	    print "Unquoted: /$t/, quoted: /$r/ == /$w/: OK\n";
-	} else {
-	    print "Unquoted: /$t/, quoted: /$r/ != /$w/: FAIL\n";
-	    $fail++;
-	}
-    }
-    print "\n";
-    print "Tests run: $tests.  Tests failed: $fail\n";
-}
-
-
 sub quoteFileName {
     my ($string) = @_;
 
@@ -64,7 +30,6 @@ sub quoteFileName {
 
     return $string;
 }
-
 
 sub checkCertificates {
   my (@cerificateFiles) = @_;
@@ -158,43 +123,46 @@ sub outputSummaryNagios {
   exit($exitCode);
 }
 
-my %opts;
-getopts('w:c:e:h:t', \%opts);
-runTests,exit(0)			  if (defined($opts{'t'}));
-printUsage()                              if (defined($opts{'h'}));
-$config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
-$config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
-$config{'fileExtensions'} = $opts{'e'}    if (defined($opts{'e'}));
+sub main {
+  my %opts;
+  getopts('w:c:e:h:', \%opts);
+  printUsage()                              if (defined($opts{'h'}));
+  $config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
+  $config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
+  $config{'fileExtensions'} = $opts{'e'}    if (defined($opts{'e'}));
 
-chomp($openssl_bin);
-chomp($date_bin);
-foreach ($openssl_bin, $date_bin) {
-  if (! -e $_) {
-    printf("UNKNOWN: Error %s binary not found.\n", $_);
-    exit(3);
+  chomp($openssl_bin);
+  chomp($date_bin);
+  foreach ($openssl_bin, $date_bin) {
+    if (! -e $_) {
+      printf("UNKNOWN: Error %s binary not found.\n", $_);
+      exit(3);
+    }
   }
-}
 
-my (@scanDirectories, @cerificateFiles);
+  my (@scanDirectories, @cerificateFiles);
 
-foreach my $arg (@ARGV) {
-  if (-d $arg) {
-    push(@scanDirectories, $arg);
-  } elsif (-f $arg) {
-    push(@cerificateFiles, $arg);
+  foreach my $arg (@ARGV) {
+    if (-d $arg) {
+      push(@scanDirectories, $arg);
+    } elsif (-f $arg) {
+      push(@cerificateFiles, $arg);
+    }
   }
-}
 
-foreach my $dir (@scanDirectories) {
-  foreach my $ext (split(',', $config{'fileExtensions'})) {
-    parseDir(\@cerificateFiles, $dir, $ext);
+  foreach my $dir (@scanDirectories) {
+    foreach my $ext (split(',', $config{'fileExtensions'})) {
+      parseDir(\@cerificateFiles, $dir, $ext);
+    }
   }
+
+  if (scalar @cerificateFiles > 0) {
+    my %failedCertificates = checkCertificates(@cerificateFiles);
+    outputSummaryNagios(\%failedCertificates);
+  }
+
+  printf("OK: No certificate files found in the given paths.\n");
+  exit(0);
 }
 
-if (scalar @cerificateFiles > 0) {
-  my %failedCertificates = checkCertificates(@cerificateFiles);
-  outputSummaryNagios(\%failedCertificates);
-}
-
-printf("OK: No certificate files found in the given paths.\n");
-exit(0);
+main unless caller;
