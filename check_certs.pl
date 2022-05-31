@@ -16,16 +16,35 @@ my %config = (
 my $openssl_bin     = `which openssl`;
 my $date_bin        = `which date`;
 
+# The shell "Interanl Field Separator" - most commonly
+# <space><tab><new‐line> but has interesting uses in security
+# contexts.  If it has not been exported by the shell just match
+# whitespace.
+my $IFS             = $ENV{'IFS'} || '\s';
+
+sub quoteFileName {
+    my ($string) = @_;
+
+    # Quote some shell meta characters.
+    $string =~ s/([\[\]\{\}\\()"'\$${IFS}])/\\$1/ogm;
+
+    return $string;
+}
+
 sub checkCertificates {
   my (@cerificateFiles) = @_;
   my %failedCertificates;
 
   foreach my $certFile (@cerificateFiles) {
-    my $openssl_cmd = sprintf("%s x509 -in '%s' -noout -enddate 2>&1", $openssl_bin, $certFile);
+    my $shellName = quoteFileName($certFile);
+    my $openssl_cmd = sprintf("%s x509 -in %s -noout -enddate 2>&1", $openssl_bin, $shellName);
     my $openssl_enddate = `$openssl_cmd`;
-
+    if ($?) {
+	printf("CRITICAL: openssl fails on check of %s\n", $certFile);
+	exit 2;
+    }
     next if (!($openssl_enddate =~ m/^notAfter/));
-    
+
     $openssl_enddate =~ s/notAfter\=//;
     chomp($openssl_enddate);
 
@@ -50,6 +69,7 @@ sub checkCertificates {
 sub parseDir {
   my ($arrayRef, $dir, $ext) = (@_);
   return if (! -d $dir);
+
 
   opendir(my $dh, $dir) or return;
     while(my $file = readdir($dh)) {
@@ -103,42 +123,46 @@ sub outputSummaryNagios {
   exit($exitCode);
 }
 
-my %opts;
-getopts('w:c:e:h', \%opts);
-printUsage()                              if (defined($opts{'h'}));
-$config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
-$config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
-$config{'fileExtensions'} = $opts{'e'}    if (defined($opts{'e'}));
+sub main {
+  my %opts;
+  getopts('w:c:e:h:', \%opts);
+  printUsage()                              if (defined($opts{'h'}));
+  $config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
+  $config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
+  $config{'fileExtensions'} = $opts{'e'}    if (defined($opts{'e'}));
 
-chomp($openssl_bin);
-chomp($date_bin);
-foreach ($openssl_bin, $date_bin) {
-  if (! -e $_) {
-    printf("UNKNOWN: Error %s binary not found.\n", $_);
-    exit(3);
+  chomp($openssl_bin);
+  chomp($date_bin);
+  foreach ($openssl_bin, $date_bin) {
+    if (! -e $_) {
+      printf("UNKNOWN: Error %s binary not found.\n", $_);
+      exit(3);
+    }
   }
-}
 
-my (@scanDirectories, @cerificateFiles);
+  my (@scanDirectories, @cerificateFiles);
 
-foreach my $arg (@ARGV) {
-  if (-d $arg) {
-    push(@scanDirectories, $arg);
-  } elsif (-f $arg) {
-    push(@cerificateFiles, $arg);
+  foreach my $arg (@ARGV) {
+    if (-d $arg) {
+      push(@scanDirectories, $arg);
+    } elsif (-f $arg) {
+      push(@cerificateFiles, $arg);
+    }
   }
-}
 
-foreach my $dir (@scanDirectories) {
-  foreach my $ext (split(',', $config{'fileExtensions'})) {
-    parseDir(\@cerificateFiles, $dir, $ext);
+  foreach my $dir (@scanDirectories) {
+    foreach my $ext (split(',', $config{'fileExtensions'})) {
+      parseDir(\@cerificateFiles, $dir, $ext);
+    }
   }
+
+  if (scalar @cerificateFiles > 0) {
+    my %failedCertificates = checkCertificates(@cerificateFiles);
+    outputSummaryNagios(\%failedCertificates);
+  }
+
+  printf("OK: No certificate files found in the given paths.\n");
+  exit(0);
 }
 
-if (scalar @cerificateFiles > 0) {
-  my %failedCertificates = checkCertificates(@cerificateFiles);
-  outputSummaryNagios(\%failedCertificates);
-}
-
-printf("OK: No certificate files found in the given paths.\n");
-exit(0);
+main unless caller;
