@@ -10,7 +10,8 @@ use Getopt::Std;
 my %config = (
   'warnDays'        => 30,
   'criticalDays'    => 10,
-  'fileExtensions'  => 'cer,crt'
+  'fileExtensions'  => 'cer,crt',
+  'xclude'          => '',
 );
 
 my $openssl_bin     = `which openssl`;
@@ -55,8 +56,8 @@ sub checkCertificates {
     my $daysLeft = (int($enddate_unixts) - time()) / 86400;
 
     if ($daysLeft < $config{'warnDays'} ) {
-      $failedCertificates{$certFile} = { 
-        'endDate'     => $openssl_enddate, 
+      $failedCertificates{$certFile} = {
+        'endDate'     => $openssl_enddate,
         'daysLeft'    => $daysLeft,
         'hasExpired'  => ($daysLeft < 1)
       };
@@ -76,6 +77,8 @@ sub parseDir {
       next if ($file eq '.' || $file eq '..');
       $file = $dir . "/" . $file;
 
+      next if ($config{'xclude'} && $file =~ /$config{'xclude'}/o);
+
       if (-d $file) {
         parseDir($arrayRef, $file, $ext);
       } elsif (-f $file) {
@@ -88,11 +91,12 @@ sub parseDir {
 }
 
 sub printUsage {
-  printf("Usage:\n" . 
+  printf("Usage:\n" .
   "%s [flags] <path|file> ...\n\n" .
-  "Flags:\n-w <days>\tDays left to expire before triggering a warning alert.\n" .
-  "-c <days>\tDays left to expire before triggering a critical alert.\n" .
-  "-e <ext1,ext2>\tFile extensions to scan if a path is given.\n", $0);
+  "Flags:\n  -w <days>\tDays left to expire before triggering a warning alert.\n" .
+  "  -c <days>\tDays left to expire before triggering a critical alert.\n" .
+  "  -e <ext1,ext2>\tFile extensions to scan if a path is given.\n" .
+  "  -x <re>\tFilename pattern to exclude.\n", $0);
   exit(0);
 }
 
@@ -125,11 +129,12 @@ sub outputSummaryNagios {
 
 sub main {
   my %opts;
-  getopts('w:c:e:h:', \%opts);
+  getopts('w:c:e:h:x:', \%opts);
   printUsage()                              if (defined($opts{'h'}));
   $config{'warnDays'} = int($opts{'w'})     if (defined($opts{'w'}));
   $config{'criticalDays'} = int($opts{'c'}) if (defined($opts{'c'}));
   $config{'fileExtensions'} = $opts{'e'}    if (defined($opts{'e'}));
+  $config{'xclude'} = $opts{'x'}	    if (defined($opts{'x'}));
 
   chomp($openssl_bin);
   chomp($date_bin);
