@@ -11,6 +11,8 @@ Flags:
 -w <days>       Days left to expire before triggering a warning alert.
 -c <days>       Days left to expire before triggering a critical alert.
 -e <ext1,ext2>  File extensions to scan if a path is given.
+-x <perlre>     Filename pattern to exclude e.g. -x '-key\.'
+-d				Produce some debug output.
 ```
 
 #### Example ####
